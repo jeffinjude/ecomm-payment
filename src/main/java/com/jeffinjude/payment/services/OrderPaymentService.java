@@ -10,10 +10,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.jeffinjude.payment.entities.Product;
+import com.jeffinjude.payment.messaging.Producer;
 import com.jeffinjude.payment.entities.OrderDetailsInfo;
 import com.jeffinjude.payment.entities.OrderPayments;
 import com.jeffinjude.payment.entities.CustomerWallet;
 import com.jeffinjude.payment.entities.InventoryDetails;
+import com.jeffinjude.payment.entities.MessagePayload;
 import com.jeffinjude.payment.repositories.OrderPaymentsRepository;
 
 @Service
@@ -33,6 +35,9 @@ public class OrderPaymentService {
 	
 	@Autowired
 	CustomerWalletService customerWalletService;
+	
+	@Autowired
+	Producer messageProducer;
 	
 	public OrderPayments makeOrderPaymentService(OrderPayments orderPayments) throws Exception {
 		Optional<List<OrderPayments>> fetchedOrderPayments = orderPaymentRepository.findByOrderId(orderPayments.getOrderId());
@@ -81,7 +86,11 @@ public class OrderPaymentService {
 						log.info("Inside makeOrderPaymentService. walletPayload: " + walletPayload.toString());
 						customerWalletService.updateWalletBalanceService(walletPayload, "decrease");
 						
-						//TODO: Send message to kafka to mark order as confirmed in the order processing microservice.
+						//Send message to kafka to mark order as confirmed in the order processing microservice. Eg: { "orderId": 1, "orderStatus": "CONFIRMED"}
+						MessagePayload messagePayload = new MessagePayload();
+						messagePayload.setOrderId(orderPayments.getOrderId());
+						messagePayload.setOrderStatus("CONFIRMED");
+						messageProducer.sendMessage(messagePayload);
 						return createdPayment;
 					}
 					else {
@@ -89,8 +98,11 @@ public class OrderPaymentService {
 						orderPayments.setMessage((fetchedInventory.get().getProductQuantity() <= 0) ? "Product is out of stock" : "Customer wallet balance is low.");
 						OrderPayments failedPayment = orderPaymentRepository.save(orderPayments);
 						
-						//TODO: Send message to kafka to mark order as cancelled in the order processing microservice.
-						
+						//Send message to kafka to mark order as cancelled in the order processing microservice. Eg: { "orderId": 1, "orderStatus": "CANCELLED"}
+						MessagePayload messagePayload = new MessagePayload();
+						messagePayload.setOrderId(orderPayments.getOrderId());
+						messagePayload.setOrderStatus("CANCELLED");
+						messageProducer.sendMessage(messagePayload);
 						return failedPayment;
 					}
 				}
