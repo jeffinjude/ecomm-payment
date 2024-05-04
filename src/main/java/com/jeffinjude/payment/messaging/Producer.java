@@ -18,6 +18,11 @@ public class Producer {
 	
 	public void sendMessage(MessagePayload message) {
 		log.info("Inside Producer. Payload: " + message.toString());
-		this.kafkaTemplate.send(TOPIC, message);
+		try {
+			this.kafkaTemplate.send(TOPIC, message);
+		}
+		catch(Exception e) {
+			log.error("Kafka is unavailable. Exception: " + e.getMessage());
+		}
 	}
 }
